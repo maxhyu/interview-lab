@@ -1,0 +1,37 @@
+# Part 2 — the endpoint-inspector agent.
+#
+# A discovery agent that runs kubectl as the `endpoint-inspector` ServiceAccount and tries
+# to read the model backends in this namespace. It ships with NO permissions, so it fails
+# with Forbidden until you grant it least-privilege access (your task).
+#
+# Assumes the `model-runtime-lab` namespace already exists (from model-runtime-canary-lab.yaml).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: endpoint-inspector
+  namespace: model-runtime-lab
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: endpoint-inspector
+  namespace: model-runtime-lab
+  labels:
+    app.kubernetes.io/name: endpoint-inspector
+spec:
+  serviceAccountName: endpoint-inspector
+  containers:
+    - name: kubectl
+      image: bitnami/kubectl:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          while true; do
+            echo "=== discovering model-runtime backends ===";
+            kubectl get svc model-runtime -n model-runtime-lab            || echo "SVC READ FAILED";
+            kubectl get endpoints model-runtime -n model-runtime-lab -o wide || echo "ENDPOINTS READ FAILED";
+            kubectl get pods -n model-runtime-lab -l app=model --show-labels || echo "PODS READ FAILED";
+            sleep 15;
+          done
+  restartPolicy: Always

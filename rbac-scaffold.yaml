@@ -1,0 +1,46 @@
+# Part 2 — RBAC scaffold for the endpoint-inspector agent.
+#
+# The Role + RoleBinding are written out for you EXCEPT one field: the Role's
+# `verbs:` list is left blank. Your task is to:
+#
+#   1. Fill in the Role's `verbs:` below so the endpoint-inspector agent can do
+#      its job with least privilege (read-only) — and nothing more.
+#   2. EXPLAIN every field in this file, in your own words. Be ready to cover:
+#        - apiGroups: [""]  — which API group is the empty string, and why these
+#          resources live there;
+#        - resources        — why exactly these three, and what `["*"]` would cost;
+#        - verbs            — which you chose and why each one; why no write/delete;
+#        - Role vs ClusterRole — why a namespaced Role is right here, and what the
+#          `namespace` bounds the grant to;
+#        - the RoleBinding  — how `subjects` and `roleRef` wire the ServiceAccount
+#          to the Role, and why the names / namespaces have to line up.
+#
+# The `endpoint-inspector` ServiceAccount already exists (see endpoint-inspector.yaml)
+# — do NOT redefine it here. Do not change the kinds, names, namespace, resources, or
+# wiring; only the `verbs:` field is yours to complete.
+#
+# Apply with:  kubectl apply -f rbac-scaffold.yaml
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: endpoint-inspector
+  namespace: model-runtime-lab
+rules:
+  - apiGroups: [""]                              # core API group
+    resources: ["pods", "services", "endpoints"]
+    verbs: []                                    # TODO: fill in — least privilege, read-only
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: endpoint-inspector
+  namespace: model-runtime-lab
+subjects:
+  - kind: ServiceAccount
+    name: endpoint-inspector
+    namespace: model-runtime-lab
+roleRef:
+  kind: Role
+  name: endpoint-inspector
+  apiGroup: rbac.authorization.k8s.io

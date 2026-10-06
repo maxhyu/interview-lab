@@ -1,0 +1,120 @@
+# Part 2b — Config & Secrets management scaffold.
+#
+# This Deployment has TWO INDEPENDENT PROBLEMS with how configuration reaches
+# the container. Everything here is schema-valid; the pod starts and runs.
+# The problems are bad practices that create real risk in production.
+#
+# Your tasks:
+#   1. Inspect the running container (hints in the README) and identify both
+#      problems. Explain the concrete risk each creates.
+#   2. Fix both problems — the app's config values must stay the same; only
+#      the HOW changes. Re-apply and verify.
+#   3. Walk through each fix: why it's better, what risk it closes, and what
+#      the operational implications are (rotation, restart, file permissions).
+#
+# Hints:
+#   kubectl exec -n config-lab deploy/orders-processor -- env | sort
+#   kubectl exec -n config-lab deploy/orders-processor -- \
+#     sh -c 'cat /proc/1/environ | tr "\0" "\n" | grep -E "DB_|SIGNING"'
+#
+# Apply with:  kubectl apply -f config-management-scaffold.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: config-lab
+---
+# Non-sensitive application configuration — ConfigMap is the right vehicle here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: config-lab
+data:
+  LOG_LEVEL: "info"
+  MAX_CONNECTIONS: "20"
+  DB_HOST: "postgres.data-platform-lab.svc.cluster.local"
+  DB_PORT: "5432"
+  # ---------------------------------------------------------------
+  # (Is a signing key non-sensitive application configuration?)
+  # ---------------------------------------------------------------
+  SIGNING_KEY: "dummy-signing-key"
+---
+# Database credentials — the question is HOW they reach the container.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: config-lab
+type: Opaque
+stringData:
+  username: "orders_app"
+  password: "s3cr3t-orders-db"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-processor
+  namespace: config-lab
+  labels:
+    app: orders-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-processor
+  template:
+    metadata:
+      labels:
+        app: orders-processor
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["/bin/sh", "-c", "while true; do echo alive; sleep 30; done"]
+          env:
+            # Non-sensitive config from ConfigMap — fine.
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOG_LEVEL
+            - name: MAX_CONNECTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MAX_CONNECTIONS
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_PORT
+            # ---------------------------------------------------------------
+            # (Is this the right source for a signing key?)
+            # ---------------------------------------------------------------
+            - name: SIGNING_KEY
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SIGNING_KEY
+            # ---------------------------------------------------------------
+            # (Is env var the right way to consume a database password?)
+            # ---------------------------------------------------------------
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+          resources:
+            limits:
+              memory: 32Mi

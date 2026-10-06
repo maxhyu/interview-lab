@@ -1,0 +1,116 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: model-runtime-lab
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-runtime
+  namespace: model-runtime-lab
+  labels:
+    app.kubernetes.io/name: model-runtime
+spec:
+  type: ClusterIP
+  selector:
+    app: model
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-runtime
+  namespace: model-runtime-lab
+  labels:
+    app.kubernetes.io/name: model-runtime
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: model
+      role: runtime
+  template:
+    metadata:
+      labels:
+        app: model
+        role: runtime
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            limits:
+              memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-canary
+  namespace: model-runtime-lab
+  labels:
+    app.kubernetes.io/name: model-canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model
+      role: canary
+  template:
+    metadata:
+      labels:
+        app: model
+        role: canary
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:1.36
+          command: ["/bin/sh", "-c", "sleep 3600"]
+          resources:
+            limits:
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: model-loader
+  namespace: model-runtime-lab
+  labels:
+    app.kubernetes.io/name: model-loader
+spec:
+  containers:
+    - name: loader
+      image: polinux/stress
+      command: ["stress"]
+      args: ["--vm", "1", "--vm-bytes", "100M", "--vm-hang", "1"]
+      resources:
+        limits:
+          memory: 32Mi
+  restartPolicy: Always
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: toolbox
+  namespace: model-runtime-lab
+  labels:
+    app.kubernetes.io/name: toolbox
+spec:
+  containers:
+    - name: curl
+      image: curlimages/curl:latest
+      command: ["/bin/sh", "-c", "sleep infinity"]
+  restartPolicy: Always
